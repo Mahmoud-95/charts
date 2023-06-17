@@ -1,0 +1,6 @@
+dependencies:
+- name: postgresql
+  repository: file://../postgresql1
+  version: 1.0.0
+digest: sha256:5d5b7f02621d742f70d48ba17b3561ec7a7721b0e6eefab999ba631def7b5cbd
+generated: "2023-05-18T19:54:38.517344232+02:00"

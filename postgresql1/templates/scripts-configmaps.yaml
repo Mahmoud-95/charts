@@ -1,0 +1,13 @@
+{{- if  .Values.postgresql.startupScripts }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ printf "%s-startup" (include "postgresql.fullname" .) }}
+  labels:
+    {{- include "postgresql.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.postgresql.startupScripts }}
+  {{ $key }}: |
+    {{- tpl $value $ | nindent 4 }}
+  {{- end }}
+{{- end -}}

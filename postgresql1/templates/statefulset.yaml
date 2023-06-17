@@ -1,0 +1,128 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "postgresql.fullname" . }}
+  labels: 
+    {{- include "postgresql.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: 
+      {{- include "postgresql.labels" . | nindent 6 }}
+  serviceName: {{ printf "%s-headless" (include "postgresql.fullname" .) }}
+  template:
+    metadata:
+      annotations:
+        checksum/config-startup: {{ include (print .Template.BasePath "/scripts-configmaps.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print .Template.BasePath "/secrets.yaml") . | sha256sum }}
+      labels: 
+        {{- include "postgresql.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: 999 # PostgreSQL user group
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- tpl . $ | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- with .Values.postgresql.extraVolumes }}
+        {{- tpl . $ | nindent 8 }}
+        {{- end }}
+        {{- with .Values.postgresql.startupScripts }}
+        - name: startup
+          configMap:
+            name: {{ printf "%s-startup" (include "postgresql.fullname" .) }}
+            items:
+              {{- range $key, $value := . }}
+              - key: {{ $key }}
+                path: {{ $key }}
+              {{- end }}
+        {{- end }}
+      {{- if .Values.tls.enabled }}
+      - name: tls-volume
+        secret:
+          secretName: {{ .Release.Name }}-tls
+          defaultMode: 0640 # PostgreSQL required permissions for server.crt and server.key files
+      {{- end }}
+      - name: config-volume
+        configMap:
+          name: {{ .Release.Name }}-postgresql-config
+      containers:
+      - name: postgresql-server
+        image: "{{ .Values.postgresql.image.repo }}:{{ .Values.postgresql.image.tag }}"
+        imagePullPolicy: Always
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        ports:
+        - containerPort: 5432
+          name: postgres
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/postgresql/volume
+        - name: {{ .Release.Name }}-postgresql-pvc
+          mountPath: /var/lib/postgresql/data
+        {{- range $key, $value := .Values.postgresql.startupScripts }}
+        - name: startup
+          mountPath: "/docker-entrypoint-initdb.d/{{ $key }}"
+          subPath: "{{ $key }}"
+          readOnly: true
+        {{- end }}
+        {{- with .Values.postgresql.extraVolumeMounts }}
+        {{- tpl . $ | nindent 12 }}
+        {{- end }}
+        env:
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: "PGDATA"
+          value: "/var/lib/postgresql/data/pgdata"
+        - name: "POSTGRES_PASSWORD"
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "postgresql.fullname" . }}
+              key: password
+        - name: "POSTGRES_USER"
+          value: {{ include "postgresql.username" . }}
+        - name: "POSTGRES_DB"
+          value: {{ include "postgresql.database" . }}
+        livenessProbe: 
+          exec:
+            command:
+              - bash
+              - -c
+              - exec pg_isready -U {{ include "postgresql.username" . | quote }} -d {{ include "postgresql.database" .  | quote }} -h 127.0.0.1 -p 5432
+        readinessProbe: 
+          exec:
+            command:
+              - bash
+              - -c
+              - exec pg_isready -U {{ include "postgresql.username" . | quote }} -d {{ include "postgresql.database" .  | quote }} -h 127.0.0.1 -p 5432
+        startupProbe: 
+          exec:
+            command:
+              - bash
+              - -c
+              - exec pg_isready -U {{ include "postgresql.username" . | quote }} -d {{ include "postgresql.database" .  | quote }} -h 127.0.0.1 -p 5432
+  volumeClaimTemplates:
+  - metadata:
+      name: {{ .Release.Name }}-postgresql-pvc
+      labels: 
+        app.kubernetes.io/name: {{ .Release.Name }}
+        app.kubernetes.io/component: postgresql-server
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: {{ .Values.postgresql.persistence.size }}
+      storageClassName: {{ include "postgresql.storageclass" . }}

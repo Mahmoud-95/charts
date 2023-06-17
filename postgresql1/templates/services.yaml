@@ -1,0 +1,15 @@
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ include "postgresql.fullname" . }}
+  labels: 
+    {{- include "postgresql.labels" . | nindent 4 }}
+spec:
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+  selector: 
+    {{- include "postgresql.labels" . | nindent 4 }}
+  type: ClusterIP

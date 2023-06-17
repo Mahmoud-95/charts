@@ -1,0 +1,103 @@
+global: 
+  postgresql: 
+    storageClass: ""
+    auth: 
+      user: "alpha"
+      database: "alpha"
+      password: "alpha"
+postgresql:
+  image:
+    repo: postgres
+    tag: "14.5"
+  persistence:
+    size: '10Gi'
+    storageClass: null
+  auth: 
+    user: "alpha"
+    database: "alpha"
+    password: "alpha"
+  serviceAccount: null
+  extraVolumeMounts: ""
+  extraVolumes: ""
+  startupScripts: {}
+  # WildFly CLI script for configuring the node-identifier
+    # keycloak.cli: |
+    #   {{- .Files.Get "scripts/keycloak.cli" }}
+fullnameOverride: ""
+nameOverride: ""
+resources: 
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 100Mi
+
+
+affinity: {}
+# podAntiAffinity:
+#   requiredDuringSchedulingIgnoredDuringExecution:
+#     - labelSelector:
+#         matchLabels:
+#           {{- include "postgresql.selectorLabels" . | nindent 10 }}
+#         matchExpressions:
+#           - key: app.kubernetes.io/component
+#             operator: NotIn
+#             values:
+#               - test
+#       topologyKey: kubernetes.io/hostname
+#   preferredDuringSchedulingIgnoredDuringExecution:
+#     - weight: 100
+#       podAffinityTerm:
+#         labelSelector:
+#           matchLabels:
+#             {{- include "postgresql.selectorLabels" . | nindent 12 }}
+#           matchExpressions:
+#             - key: app.kubernetes.io/component
+#               operator: NotIn
+#               values:
+#                 - test
+#         topologyKey: failure-domain.beta.kubernetes.io/zone
+
+nodeSelector: {}
+
+# Node taints to tolerate
+tolerations: []
+
+
+autoscaling:
+  # If `true`, a autoscaling/v2beta2 HorizontalPodAutoscaler resource is created (requires Kubernetes 1.18 or above)
+  # Autoscaling seems to be most reliable when using KUBE_PING service discovery (see README for details)
+  # This disables the `replicas` field in the StatefulSet
+  enabled: true
+  # Additional HorizontalPodAutoscaler labels
+  labels: {}
+  # The minimum and maximum number of replicas for the postgresql StatefulSet
+  minReplicas: 1
+  maxReplicas: 3
+  # The metrics to use for scaling
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+  # The scaling policy to use. This will scale up quickly but only scale down a single Pod per 5 minutes.
+  # This is important because caches are usually only replicated to 2 Pods and if one of those Pods is terminated this will give the cluster time to recover.
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+
+tls:
+  enabled: false
+  base64EncodedPrivateKey: null
+  base64EncodedCertificate: null

@@ -1,0 +1,2 @@
+openssl req -x509 -sha256 -nodes -days 365 -newkey rsa:2048 -keyout api-tls.key -out api-tls.crt -subj "/CN=api.localtest.me/O=hotel"
+kubectl create secret -n hotel tls api-tls-secret --key api-tls.key --cert api-tls.crt
